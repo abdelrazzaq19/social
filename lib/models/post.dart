@@ -1,20 +1,8 @@
-import 'dart:math';
-
-import 'package:faker/faker.dart';
 import 'package:quick_social/models/models.dart';
 
 class Post {
-  final User owner;
-  final String postImage;
-  final String location;
-  final String caption;
-  final List<Comment> comments;
-  final int likeCount;
-  final int saveCount;
-  final bool isLiked;
-  final bool isSaved;
-
   const Post({
+    required this.id,
     required this.owner,
     required this.postImage,
     required this.location,
@@ -22,28 +10,48 @@ class Post {
     required this.comments,
     required this.likeCount,
     required this.saveCount,
-    this.isLiked = false,
-    this.isSaved = false,
+    required this.createdAt,
   });
 
-  static final List<Post> dummyPosts = List.generate(
-    30,
-    (index) {
-      final Faker faker = Faker();
-      return Post(
-        owner: User.dummyUsers[
-            index > 15 ? 0 : Random().nextInt(User.dummyUsers.length - 1)],
-        postImage: faker.image.loremPicsum(
-          random: Random().nextInt(30),
-          height: 640,
-          width: 640,
-        ),
-        location: '${faker.address.city()}, ${faker.address.country()}',
-        caption: faker.lorem.sentence(),
-        comments: Comment.generateDummyComments(),
-        likeCount: Random().nextInt(1000),
-        saveCount: Random().nextInt(1000),
-      );
-    },
-  );
+  final String id;
+  final User owner;
+  final String postImage;
+  final String location;
+  final String caption;
+  final List<Comment> comments;
+  final int likeCount;
+  final int saveCount;
+  final DateTime createdAt;
+
+  /// Whether the signed-in user has liked or saved a post is **not** on the
+  /// model: it lives in `FeedRepository`, so there is one answer everywhere
+  /// the post appears. The counts here are everyone else's.
+  Post copyWith({
+    List<Comment>? comments,
+    int? likeCount,
+    int? saveCount,
+  }) {
+    return Post(
+      id: id,
+      owner: owner,
+      postImage: postImage,
+      location: location,
+      caption: caption,
+      comments: comments ?? this.comments,
+      likeCount: likeCount ?? this.likeCount,
+      saveCount: saveCount ?? this.saveCount,
+      createdAt: createdAt,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) || (other is Post && other.id == id);
+  }
+
+  @override
+  int get hashCode => id.hashCode;
+
+  @override
+  String toString() => 'Post($id, by @${owner.username})';
 }

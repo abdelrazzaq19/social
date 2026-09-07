@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:quick_social/data/dummy_data_source.dart';
 import 'package:quick_social/models/models.dart';
-import 'package:quick_social/widgets/notification_tile.dart';
+import 'package:quick_social/repositories/repositories.dart';
 import 'package:quick_social/widgets/widgets.dart';
 
 class NotificationsPage extends StatefulWidget {
@@ -12,26 +14,17 @@ class NotificationsPage extends StatefulWidget {
 
 class _NotificationsPageState extends State<NotificationsPage>
     with AutomaticKeepAliveClientMixin {
-  late List<UserNotification> _notifications;
-
-  @override
-  void initState() {
-    super.initState();
-    _notifications = UserNotification.dummyNotifications;
-  }
-
-  void readAll() {
-    setState(() {
-      _notifications = _notifications.map((e) {
-        return e.copyWith(isRead: true);
-      }).toList();
-    });
-  }
+  late final List<UserNotification> _notifications =
+      DummyDataSource.instance.notifications;
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
     final textTheme = Theme.of(context).textTheme;
+    final NotificationRepository repository =
+        context.watch<NotificationRepository>();
+
+    final bool hasUnread = repository.hasUnread(_notifications);
 
     return Scaffold(
       appBar: AppBar(
@@ -45,7 +38,9 @@ class _NotificationsPageState extends State<NotificationsPage>
                 children: [
                   Text('Notifikasi', style: textTheme.headlineSmall),
                   TextButton.icon(
-                    onPressed: readAll,
+                    onPressed: hasUnread
+                        ? () => repository.markAllRead(_notifications)
+                        : null,
                     icon: const Icon(Icons.check),
                     label: const Text('Tandai telah dibaca'),
                   ),

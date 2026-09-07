@@ -1,29 +1,28 @@
-import 'dart:math';
-
-import 'package:faker/faker.dart';
 import 'package:quick_social/models/models.dart';
 
 class Comment {
-  final User owner;
-  final String body;
-  final int likeCount;
-
   const Comment({
+    required this.id,
     required this.owner,
     required this.body,
     required this.likeCount,
+    required this.createdAt,
   });
 
-  static List<Comment> generateDummyComments() {
-    return List.generate(
-      Random().nextInt(10),
-      (index) {
-        return Comment(
-          owner: User.dummyUsers[Random().nextInt(User.dummyUsers.length - 1)],
-          body: Faker().lorem.sentence(),
-          likeCount: Random().nextInt(1000),
-        );
-      },
-    );
+  final String id;
+  final User owner;
+  final String body;
+  final int likeCount;
+  final DateTime createdAt;
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) || (other is Comment && other.id == id);
   }
+
+  @override
+  int get hashCode => id.hashCode;
+
+  @override
+  String toString() => 'Comment($id, by @${owner.username})';
 }

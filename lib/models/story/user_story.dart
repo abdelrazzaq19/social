@@ -1,21 +1,26 @@
 import 'package:quick_social/models/models.dart';
 
 class UserStory {
-  final User owner;
-  final List<Story> stories;
-
   const UserStory({
     required this.owner,
     required this.stories,
   });
 
-  static List<UserStory> dummyUserStories = List.generate(
-    User.dummyUsers.length,
-    (index) {
-      return UserStory(
-        owner: User.dummyUsers[index],
-        stories: Story.generateDummyStories(),
-      );
-    },
-  );
+  final User owner;
+  final List<Story> stories;
+
+  /// The most recent story, which is what the ring in the feed represents.
+  Story get latest => stories.last;
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other is UserStory && other.owner.id == owner.id);
+  }
+
+  @override
+  int get hashCode => owner.id.hashCode;
+
+  @override
+  String toString() => 'UserStory(@${owner.username}, ${stories.length})';
 }

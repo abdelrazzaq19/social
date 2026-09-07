@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:quick_social/data/dummy_data_source.dart';
 import 'package:quick_social/models/models.dart';
+import 'package:quick_social/repositories/repositories.dart';
+import 'package:quick_social/theme/app_tokens.dart';
 import 'package:quick_social/widgets/comment_tile.dart';
+import 'package:quick_social/widgets/common/empty_state.dart';
 
 class CommentsBottomSheet extends StatefulWidget {
   const CommentsBottomSheet({super.key, required this.post});
@@ -8,16 +13,21 @@ class CommentsBottomSheet extends StatefulWidget {
   static Future<void> showCommentsBottomSheet(
     BuildContext context, {
     required Post post,
-  }) async {
-    return await showModalBottomSheet(
+  }) {
+    return showModalBottomSheet<void>(
       context: context,
       useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      enableDrag: true,
       isScrollControlled: true,
-      builder: (_) => CommentsBottomSheet(post: post),
+      // The providers live above the navigator, and a modal route builds
+      // outside this subtree — so hand the sheet the same values explicitly.
+      builder: (_) => MultiProvider(
+        providers: [
+          ChangeNotifierProvider<CommentRepository>.value(
+            value: context.read<CommentRepository>(),
+          ),
+        ],
+        child: CommentsBottomSheet(post: post),
+      ),
     );
   }
 
@@ -28,136 +38,170 @@ class CommentsBottomSheet extends StatefulWidget {
 }
 
 class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
-  List<Comment> _comments = [];
+  /// Owned by the state, created once, and disposed.
+  ///
+  /// This used to be built inside `build()`: never disposed, and only
+  /// *appearing* to clear on submit because the old controller was thrown
+  /// away with the frame.
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
 
   @override
-  void initState() {
-    super.initState();
-    _comments = widget.post.comments;
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final String text = _controller.text.trim();
+
+    // Whitespace is not a comment.
+    if (text.isEmpty) return;
+
+    context.read<CommentRepository>().add(
+          widget.post.id,
+          Comment(
+            id: '${widget.post.id}-c-local-'
+                '${DateTime.now().microsecondsSinceEpoch}',
+            owner: DummyDataSource.instance.currentUser,
+            body: text,
+            likeCount: 0,
+            createdAt: DateTime.now(),
+          ),
+        );
+
+    _controller.clear();
+    _focusNode.unfocus();
+  }
+
+  Future<void> _confirmDelete(Comment comment) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete comment?'),
+        content: const Text('This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    context.read<CommentRepository>().delete(comment);
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Stack(
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 64),
-          child: Container(
-            margin: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom),
-            padding: const EdgeInsets.only(bottom: 64),
-            height: MediaQuery.of(context).size.height,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
-              ),
+    final CommentRepository repository = context.watch<CommentRepository>();
+    final List<Comment> comments = repository.commentsFor(widget.post);
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.7,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) {
+        return Column(
+          children: [
+            _header(context, comments.length),
+            Expanded(
+              child: comments.isEmpty
+                  ? _emptyState(scrollController)
+                  : ListView.builder(
+                      controller: scrollController,
+                      padding: const EdgeInsets.only(top: AppSpacing.sm),
+                      itemCount: comments.length,
+                      itemBuilder: (_, index) {
+                        final Comment comment = comments[index];
+                        return CommentTile(
+                          comment: comment,
+                          onDelete: repository.canDelete(comment)
+                              ? () => _confirmDelete(comment)
+                              : null,
+                        );
+                      },
+                    ),
             ),
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: _comments.length,
-              itemBuilder: (_, index) {
-                return index == 0
-                    ? Padding(
-                        padding: const EdgeInsets.only(top: 16),
-                        child: CommentTile(comment: _comments[index]),
-                      )
-                    : CommentTile(comment: _comments[index]);
-              },
-            ),
-          ),
+            _composer(context),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _header(BuildContext context, int count) {
+    final ThemeData theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Text(
+        count == 1 ? '1 comment' : '$count comments',
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w700,
         ),
-        Align(
-          alignment: Alignment.topCenter,
-          child: _header(theme),
-        ),
-        Align(
-          alignment: Alignment.bottomCenter,
-          child: _commentTextField(theme),
+      ),
+    );
+  }
+
+  /// Scrollable even when empty, so the sheet still drags.
+  Widget _emptyState(ScrollController scrollController) {
+    return ListView(
+      controller: scrollController,
+      children: const [
+        EmptyState(
+          icon: Icons.mode_comment_outlined,
+          title: 'No comments yet',
+          message: 'Be the first to say something.',
         ),
       ],
     );
   }
 
-  Widget _header(ThemeData theme) {
-    return SizedBox(
-      height: 64,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          InkWell(
-            onTap: () {},
-            child: Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(25),
-                color: theme.dividerColor.withAlpha(100),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Text(
-              'Comments',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _commentTextField(ThemeData theme) {
-    TextEditingController controller = TextEditingController();
+  Widget _composer(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
 
     return Container(
-      color: theme.colorScheme.secondaryContainer,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      margin: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.sm,
+        AppSpacing.sm,
+        AppSpacing.sm + MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(top: BorderSide(color: theme.colorScheme.outlineVariant)),
+      ),
       child: Row(
         children: [
-          Flexible(
+          Expanded(
             child: TextField(
-              controller: controller,
-              autofocus: true,
-              onSubmitted: _submitComment,
-              decoration: InputDecoration(
-                hintText: 'Tulis sesuatu',
-                filled: true,
-                isDense: true,
-                fillColor: theme.colorScheme.surface,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  borderSide: BorderSide.none,
-                ),
+              controller: _controller,
+              focusNode: _focusNode,
+              textInputAction: TextInputAction.send,
+              onSubmitted: (_) => _submit(),
+              minLines: 1,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                hintText: 'Add a comment',
               ),
             ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: AppSpacing.xs),
           IconButton(
-            onPressed: () {
-              if (controller.text.isEmpty) return;
-              _submitComment(controller.text);
-            },
+            onPressed: _submit,
+            tooltip: 'Post comment',
             icon: const Icon(Icons.send),
           ),
         ],
       ),
     );
-  }
-
-  void _submitComment(String text) {
-    setState(() {
-      _comments.add(
-        Comment(
-          owner: User.dummyUsers[0],
-          body: text,
-          likeCount: 0,
-        ),
-      );
-    });
   }
 }

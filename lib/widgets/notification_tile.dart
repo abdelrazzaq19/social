@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:quick_social/models/models.dart';
+import 'package:quick_social/repositories/repositories.dart';
 
-class NotificationTile extends StatefulWidget {
+/// Marks the dot shown on an unread notification, so tests can count unread
+/// tiles without reaching into the tile's internals.
+const Key unreadDotKey = ValueKey('notification-unread-dot');
+
+class NotificationTile extends StatelessWidget {
   const NotificationTile({
     super.key,
     required this.notification,
@@ -10,61 +16,38 @@ class NotificationTile extends StatefulWidget {
   final UserNotification notification;
 
   @override
-  State<NotificationTile> createState() => _NotificationTileState();
-}
-
-class _NotificationTileState extends State<NotificationTile> {
-  late UserNotification _notification;
-
-  @override
-  void initState() {
-    super.initState();
-    _notification = widget.notification;
-  }
-
-  @override
-  void didUpdateWidget(covariant NotificationTile oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _notification = widget.notification;
-  }
-
-  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final NotificationRepository repository =
+        context.watch<NotificationRepository>();
 
-    final DateTime dateTime = widget.notification.dateTime;
+    final bool isRead = repository.isRead(notification.id);
+    final DateTime dateTime = notification.createdAt;
 
     return ListTile(
-      onTap: () {
-        setState(() {
-          _notification = _notification.copyWith(isRead: true);
-        });
-      },
+      onTap: () => repository.markRead(notification.id),
       leading: Icon(
-        switch (widget.notification.type) {
+        switch (notification.type) {
           NotificationType.like => Icons.favorite,
           NotificationType.comment => Icons.chat_bubble,
           NotificationType.follow => Icons.person_add,
         },
-        color: _notification.isRead
-            ? theme.disabledColor
-            : theme.colorScheme.primary,
+        color: isRead ? theme.disabledColor : theme.colorScheme.primary,
       ),
       title: Text(
-        widget.notification.message,
+        _message(notification),
         style: TextStyle(
-          color: _notification.isRead
-              ? theme.colorScheme.onSurface.withAlpha(150)
-              : null,
+          color: isRead ? theme.colorScheme.onSurface.withAlpha(150) : null,
         ),
       ),
       subtitle: Text(
         '${dateTime.day}/${dateTime.month}/${dateTime.year}',
         style: TextStyle(color: theme.disabledColor),
       ),
-      trailing: _notification.isRead
+      trailing: isRead
           ? null
           : Container(
+              key: unreadDotKey,
               width: 10,
               height: 10,
               decoration: BoxDecoration(
@@ -73,5 +56,17 @@ class _NotificationTileState extends State<NotificationTile> {
               ),
             ),
     );
+  }
+
+  /// Composed here rather than stored on the notification, so T16 can move
+  /// these strings into ARB files without touching the data layer.
+  String _message(UserNotification notification) {
+    final String username = notification.actor.username;
+
+    return switch (notification.type) {
+      NotificationType.like => '$username liked your post',
+      NotificationType.comment => '$username replied to your comment',
+      NotificationType.follow => '$username started following you',
+    };
   }
 }

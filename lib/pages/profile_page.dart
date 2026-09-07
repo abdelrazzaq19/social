@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:quick_social/common/common.dart';
+import 'package:quick_social/data/dummy_data_source.dart';
 import 'package:quick_social/models/models.dart';
 import 'package:quick_social/pages/pages.dart';
+import 'package:quick_social/repositories/repositories.dart';
 import 'package:quick_social/widgets/widgets.dart';
 
 class ProfilePage extends StatelessWidget {
@@ -9,8 +12,8 @@ class ProfilePage extends StatelessWidget {
     super.key,
     required this.user,
     this.isNavigatorPushed = false,
-  })  : story = UserStory.dummyUserStories.firstWhere((e) => e.owner == user),
-        posts = Post.dummyPosts.where((e) => e.owner == user).toList();
+  })  : story = DummyDataSource.instance.userStories.firstWhere((e) => e.owner == user),
+        posts = DummyDataSource.instance.posts.where((e) => e.owner == user).toList();
 
   static MaterialPageRoute route(User user) {
     return MaterialPageRoute(
@@ -110,7 +113,10 @@ class ProfilePage extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        user.followersCount.toString(),
+                        context
+                            .watch<SocialRepository>()
+                            .followerCount(user)
+                            .toString(),
                         style: textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -181,37 +187,36 @@ class ProfilePage extends StatelessWidget {
             style: textTheme.bodySmall,
             textAlign: TextAlign.center,
           ),
-          user.isMe ? const SizedBox(height: 24) : _profileButtons(),
+          user.isMe ? const SizedBox(height: 24) : _profileButtons(context),
         ],
       ),
     );
   }
 
-  Widget _profileButtons() {
+  Widget _profileButtons(BuildContext context) {
+    final SocialRepository social = context.watch<SocialRepository>();
+    final bool isFollowing = social.isFollowing(user.id);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          FilledButton(
-            onPressed: () {},
-            child: const Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 10,
-              ),
-              child: Text('Follow'),
-            ),
-          ),
+          // Following reads as a completed state, so it drops to the quieter
+          // button style once the user is following.
+          isFollowing
+              ? OutlinedButton.icon(
+                  onPressed: () => social.toggleFollow(user.id),
+                  icon: const Icon(Icons.check, size: 18),
+                  label: const Text('Following'),
+                )
+              : FilledButton(
+                  onPressed: () => social.toggleFollow(user.id),
+                  child: const Text('Follow'),
+                ),
           OutlinedButton(
             onPressed: () {},
-            child: const Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 10,
-              ),
-              child: Text('Message'),
-            ),
+            child: const Text('Message'),
           ),
         ],
       ),

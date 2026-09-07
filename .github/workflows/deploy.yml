@@ -24,6 +24,11 @@ jobs:
           channel: stable
 
       - run: flutter pub get
+
+      # Quality gate: a failure here blocks the deploy.
+      - run: flutter analyze
+      - run: flutter test
+
       - run: flutter build web --base-href /quick_social/
 
       - uses: actions/upload-pages-artifact@v3

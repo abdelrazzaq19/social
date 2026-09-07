@@ -1,18 +1,6 @@
-import 'dart:math';
-
-import 'package:faker/faker.dart';
-
 class User {
-  final String profileImage;
-  final String bannerImage;
-  final String username;
-  final String fullname;
-  final String bio;
-  final int followersCount;
-  final int followingCount;
-  final bool isMe;
-
   const User({
+    required this.id,
     required this.profileImage,
     required this.bannerImage,
     required this.username,
@@ -23,28 +11,43 @@ class User {
     this.isMe = false,
   });
 
-  static final List<User> dummyUsers = List.generate(
-    5,
-    (index) {
-      final Faker faker = Faker();
-      return User(
-        isMe: index == 0,
-        profileImage: faker.image.loremPicsum(
-          random: Random().nextInt(5),
-          width: 640,
-          height: 640,
-        ),
-        bannerImage: faker.image.loremPicsum(
-          random: Random().nextInt(5),
-          width: 640,
-          height: 480,
-        ),
-        username: faker.internet.userName(),
-        fullname: faker.person.name(),
-        bio: faker.lorem.sentence(),
-        followersCount: Random().nextInt(1000),
-        followingCount: Random().nextInt(1000),
-      );
-    },
-  );
+  /// Stable across runs, so it can key persisted state and appear in a URL.
+  final String id;
+
+  final String profileImage;
+  final String bannerImage;
+  final String username;
+  final String fullname;
+  final String bio;
+  final int followersCount;
+  final int followingCount;
+  final bool isMe;
+
+  User copyWith({
+    int? followersCount,
+    int? followingCount,
+  }) {
+    return User(
+      id: id,
+      profileImage: profileImage,
+      bannerImage: bannerImage,
+      username: username,
+      fullname: fullname,
+      bio: bio,
+      followersCount: followersCount ?? this.followersCount,
+      followingCount: followingCount ?? this.followingCount,
+      isMe: isMe,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) || (other is User && other.id == id);
+  }
+
+  @override
+  int get hashCode => id.hashCode;
+
+  @override
+  String toString() => 'User($id, @$username)';
 }

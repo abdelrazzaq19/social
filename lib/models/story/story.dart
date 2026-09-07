@@ -1,30 +1,24 @@
-import 'dart:math';
-
-import 'package:faker/faker.dart';
-
 class Story {
-  final String storyImage;
-  final String caption;
-
   const Story({
+    required this.id,
     required this.storyImage,
     required this.caption,
+    required this.createdAt,
   });
 
-  static List<Story> generateDummyStories() {
-    return List.generate(
-      Random().nextInt(6) + 1,
-      (index) {
-        final Faker faker = Faker();
-        return Story(
-          storyImage: faker.image.loremPicsum(
-            random: Random().nextInt(10),
-            height: 640,
-            width: 360,
-          ),
-          caption: faker.lorem.sentence(),
-        );
-      },
-    );
+  final String id;
+  final String storyImage;
+  final String caption;
+  final DateTime createdAt;
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) || (other is Story && other.id == id);
   }
+
+  @override
+  int get hashCode => id.hashCode;
+
+  @override
+  String toString() => 'Story($id)';
 }
